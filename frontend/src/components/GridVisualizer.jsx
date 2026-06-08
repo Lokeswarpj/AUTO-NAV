@@ -36,6 +36,19 @@ const GridVisualizer = ({ onStatsUpdate, onTelemetryUpdate, currentTelemetry, ac
 
   const isMouseDown = useRef(false);
   const driveIntervalRef = useRef(null);
+  const hudLockedRef = useRef(false);
+
+  // Trigger emergency lock and message
+  const triggerEmergencyStop = (msg) => {
+    hudLockedRef.current = true;
+    onTelemetryUpdate({
+      currentSpeed: 0,
+      currentAccel: 0,
+      statusMsg: msg,
+      stepIndex: 0,
+      totalSteps: 0
+    });
+  };
 
   // Check backend server connection status on mount
   useEffect(() => {
@@ -47,6 +60,7 @@ const GridVisualizer = ({ onStatsUpdate, onTelemetryUpdate, currentTelemetry, ac
 
   // Update telemetry details in the parent dashboard
   const updateTelemetry = (speed, accel, msg, stepIdx = 0, total = 0) => {
+    if (hudLockedRef.current) return;
     onTelemetryUpdate({
       currentSpeed: speed,
       currentAccel: accel,
@@ -245,6 +259,7 @@ const GridVisualizer = ({ onStatsUpdate, onTelemetryUpdate, currentTelemetry, ac
   // Erases pathfinding drawings but keeps walls
   const clearVisualization = () => {
     if (isVisualizing || isDriving) return;
+    hudLockedRef.current = false;
     setExploredNodes([]);
     setPathNodes([]);
     setSpeedProfile([]);
@@ -450,6 +465,7 @@ const GridVisualizer = ({ onStatsUpdate, onTelemetryUpdate, currentTelemetry, ac
   const startAutopilotDrive = () => {
     if (isVisualizing || isDriving || pathNodes.length === 0) return;
     
+    hudLockedRef.current = false;
     setIsDriving(true);
     let index = 0;
     setCarPosition([pathNodes[0].row, pathNodes[0].col]);
@@ -464,6 +480,29 @@ const GridVisualizer = ({ onStatsUpdate, onTelemetryUpdate, currentTelemetry, ac
       }
 
       const currNode = pathNodes[index];
+
+      // Active Collision Detection (exclude start node index 0)
+      const isWall = index > 0 && obstacles.some(o => o[0] === currNode.row && o[1] === currNode.col);
+      const isHazard = index > 0 && hazards.some(h => h[0] === currNode.row && h[1] === currNode.col);
+
+      if (isWall) {
+        setIsDriving(false);
+        setCarPosition([currNode.row, currNode.col]);
+        setStartNode([currNode.row, currNode.col]);
+        if (driveIntervalRef.current) clearTimeout(driveIntervalRef.current);
+        triggerEmergencyStop(`EMERGENCY CRASH: VEHICLE COLLIDED WITH WALL AT [${currNode.row}, ${currNode.col}]!`);
+        return;
+      }
+
+      if (isHazard) {
+        setIsDriving(false);
+        setCarPosition([currNode.row, currNode.col]);
+        setStartNode([currNode.row, currNode.col]);
+        if (driveIntervalRef.current) clearTimeout(driveIntervalRef.current);
+        triggerEmergencyStop(`EMERGENCY STOP: VEHICLE ENCOUNTERED HAZARD AT [${currNode.row}, ${currNode.col}]!`);
+        return;
+      }
+
       const speedStats = speedProfile[index] || { speed: 50.0, acceleration: 0.0 };
       
       setCarPosition([currNode.row, currNode.col]);
@@ -558,9 +597,9 @@ const GridVisualizer = ({ onStatsUpdate, onTelemetryUpdate, currentTelemetry, ac
             }
 
             if (!reRouteResult.path || reRouteResult.path.length === 0) {
-              updateTelemetry(0, 0, 'FATAL FAILURE: NO ESCAPE ROUTE DETECTED. VECHILE LOCKED IN EMERGENCY STOP.');
               setIsVisualizing(false);
-              setStartNode(oldStart);
+              setStartNode(currentStartPos);
+              triggerEmergencyStop('FATAL FAILURE: NO ESCAPE ROUTE DETECTED. VEHICLE LOCKED IN EMERGENCY STOP.');
               return;
             }
 
