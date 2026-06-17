@@ -9,6 +9,7 @@ const GridVisualizer = ({ onStatsUpdate, onTelemetryUpdate, currentTelemetry, ac
 
   // Key configurations
   const [startNode, setStartNode] = useState([9, 4]);
+  const [originalStartNode, setOriginalStartNode] = useState([9, 4]);
   const [targetNode, setTargetNode] = useState([9, 25]);
   const [obstacles, setObstacles] = useState([]);
   const [hazards, setHazards] = useState([]);
@@ -82,6 +83,7 @@ const GridVisualizer = ({ onStatsUpdate, onTelemetryUpdate, currentTelemetry, ac
 
     if (mouseMode === 'start') {
       setStartNode([r, c]);
+      setOriginalStartNode([r, c]);
       clearVisualization();
     } else if (mouseMode === 'target') {
       setTargetNode([r, c]);
@@ -244,6 +246,7 @@ const GridVisualizer = ({ onStatsUpdate, onTelemetryUpdate, currentTelemetry, ac
     setObstacles(newObstacles);
     setHazards(newHazards);
     setStartNode(newStart);
+    setOriginalStartNode(newStart);
     setTargetNode(newTarget);
   };
 
@@ -474,7 +477,7 @@ const GridVisualizer = ({ onStatsUpdate, onTelemetryUpdate, currentTelemetry, ac
       if (index >= pathNodes.length) {
         // Destination arrived
         setIsDriving(false);
-        setCarPosition(null);
+        setCarPosition([pathNodes[pathNodes.length - 1].row, pathNodes[pathNodes.length - 1].col]);
         updateTelemetry(0, 0, 'ARRIVED AT DESTINATION. DOCKED SAFELY.', 0, 0);
         return;
       }
@@ -723,7 +726,7 @@ const GridVisualizer = ({ onStatsUpdate, onTelemetryUpdate, currentTelemetry, ac
         
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
           <label style={{ fontSize: '0.75rem', fontFamily: 'var(--font-hud)', color: 'var(--text-muted)' }}>SELECT PATHFINDER</label>
-          <select className="cyber-select" value={selectedAlgo} onChange={e => { setSelectedAlgo(e.target.value); clearVisualization(); }} disabled={isVisualizing || isDriving}>
+          <select className="cyber-select" value={selectedAlgo} onChange={e => { setSelectedAlgo(e.target.value); setStartNode(originalStartNode); clearVisualization(); }} disabled={isVisualizing || isDriving}>
             <option value="a_star">A* Search (Heuristic-Optimal)</option>
             <option value="dijkstra">Dijkstra's (Breadth-Optimal)</option>
             <option value="greedy_bfs">Greedy Best-First (Fast Heuristic)</option>
@@ -804,8 +807,7 @@ const GridVisualizer = ({ onStatsUpdate, onTelemetryUpdate, currentTelemetry, ac
                 onMouseDown={() => handleMouseDown(r, c)}
                 onMouseEnter={() => handleMouseEnter(r, c)}
               >
-                {isCar ? renderCarIcon() : isStart && !carPosition ? renderCarIcon() : null}
-                {isTarget ? renderTargetIcon() : null}
+                {isCar ? renderCarIcon() : isStart && !carPosition ? renderCarIcon() : isTarget ? renderTargetIcon() : null}
               </div>
             );
           })
